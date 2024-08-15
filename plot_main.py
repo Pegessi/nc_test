@@ -18,11 +18,13 @@ def plot_compute_graph(filename):
     nodes_times = {}
     SHOW_CUSTOM_CLUSTER = False
     CHECK_DEGREE = 6 # gpt 6
-    SCALE_UP = 1000
-    data = data[:] # [467:2100]
+    SCALE_UP = 200
+    data = data[:] #  1500 [467:2100]
     # 解析日志得到无向图
     for row in data:
         if row['INSTRUCTION'] != 'INSTRUCTION':
+            continue
+        if row['name']=='add_' and row['inputs'][0] == row['outputs'][0]:
             continue
         for iid in row['inputs']:
             input_id = int(iid[1:])
@@ -170,14 +172,24 @@ def plot_cumulative_remat_counts(filenames, labels, attr_name, title, visual_per
 
 if __name__ == '__main__':
     ### 画计算图的
-    plot_compute_graph('./logs/gpt3_350M_forward_once.log') # resnet50_once.log pp4_ml_gpt.log llama_op_once.log
+    # plot_compute_graph('./logs/resnet50.log') # resnet50_once.log pp4_ml_gpt.log llama_op_once.log
 
 
-    fig_range = [3, 4, 5]
-    fns = [ './logs/remat/remat_counts_' + str(i) + '0%.log' for i in fig_range]
-    labels = [ str(i) + r"0% budget" for i in fig_range]
+    # fig_range = [3, 4, 5]
+    # fns = [ './logs/remat/remat_counts_' + str(i) + '0%.log' for i in fig_range]
+    # labels = [ str(i) + r"0% budget" for i in fig_range]
+    # attr_name = 'cumulative_remat_counts' # 'cumulative_remat_counts'
+    # title = 'Cumulatvie Remat Counts' # 'Cumulatvie Remat Counts'
+    # visual_percent = 1
+
+    # plot_cumulative_remat_counts(fns, labels, attr_name, title, visual_percent)
+
+
+    ### 实验说明递归改善的数据
+    fns = [ './logs/remat/remat_counts_30%.log', './logs/remat/remat_nc_counts_30%.log' ]
+    labels = [ r"30% budget dtr", r"30% budget NC" ]
     attr_name = 'cumulative_remat_counts' # 'cumulative_remat_counts'
-    title = 'Cumulatvie Remat Counts' # 'Cumulatvie Remat Counts'
+    title = 'Cumulatvie Remat Counts Comparsion' # 'Cumulatvie Remat Counts'
     visual_percent = 1
 
     plot_cumulative_remat_counts(fns, labels, attr_name, title, visual_percent)
