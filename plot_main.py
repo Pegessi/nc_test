@@ -170,6 +170,51 @@ def plot_cumulative_remat_counts(filenames, labels, attr_name, title, visual_per
     plt.savefig(SAVE_PREFIX+'cunum.jpg', dpi=600)
 
 
+def plot_training_loss(files):
+    datas = []
+    for file_name in files:
+        f_data = []
+        with open(file_name, 'r') as f:
+            data = f.readlines()
+            data = [row.replace('\n', '') for row in data]
+            for row in data:
+                parts = row.split('|')
+                consumed_samples = None
+                lm_loss = None
+                for part in parts:
+                    if "consumed samples:" in part:
+                        consumed_samples = part.split(':')[1].strip()
+                    elif "lm loss:" in part:
+                        lm_loss = part.split(':')[1].strip()
+                print("Consumed samples:", consumed_samples)
+                print("LM loss:", lm_loss)
+                if consumed_samples and lm_loss:
+                    f_data.append((consumed_samples, lm_loss))
+        datas.append(f_data[:1300])
+    
+    x = [512*2048*i for i in range(1, len(datas[0])+1)]  # batch size=512, seqlen=2048
+    y1 = [eval(ele[1]) for ele in datas[0]]
+    y2 = [eval(ele[1]) for ele in datas[1]]
+
+    plt.plot(x, y1, label='Megatron-LM')
+    plt.plot(x, y2, label='Nebula-Chain')
+
+    plt.title('training convergence')  # 添加标题
+    plt.xlabel('tokens')  # 添加X轴标签
+    plt.ylabel('training loss')  # 添加Y轴标签
+
+    # plt.xticks(rotation=90)  # 旋转X轴标签以提高可读性
+    # plt.grid(axis='y')  # 添加Y轴网格线
+
+    plt.legend(loc='upper right')
+    plt.tight_layout()  # 自动调整子图参数，以充分利用图表空间
+    plt.savefig(SAVE_PREFIX+'loss.jpg', dpi=600)
+
+
+    # return datas
+
+    
+
 if __name__ == '__main__':
     ### 画计算图的
     # plot_compute_graph('./logs/resnet50.log') # resnet50_once.log pp4_ml_gpt.log llama_op_once.log
@@ -186,10 +231,12 @@ if __name__ == '__main__':
 
 
     ### 实验说明递归改善的数据
-    fns = [ './logs/remat/remat_counts_30%.log', './logs/remat/remat_nc_counts_30%.log' ]
-    labels = [ r"30% budget dtr", r"30% budget NC" ]
-    attr_name = 'cumulative_remat_counts' # 'cumulative_remat_counts'
-    title = 'Cumulatvie Remat Counts Comparsion' # 'Cumulatvie Remat Counts'
-    visual_percent = 1
+    # fns = [ './logs/remat/remat_counts_30%.log', './logs/remat/remat_nc_counts_30%.log' ]
+    # labels = [ r"30% budget dtr", r"30% budget NC" ]
+    # attr_name = 'cumulative_remat_counts' # 'cumulative_remat_counts'
+    # title = 'Cumulatvie Remat Counts Comparsion' # 'Cumulatvie Remat Counts'
+    # visual_percent = 1
 
-    plot_cumulative_remat_counts(fns, labels, attr_name, title, visual_percent)
+    # plot_cumulative_remat_counts(fns, labels, attr_name, title, visual_percent)
+
+    plot_training_loss(['./logs/GPT-1.7B_train_log_ml.log', './logs/GPT-1.7B_train_log_nc.log'])
