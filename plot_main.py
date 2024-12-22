@@ -2,11 +2,40 @@ import matplotlib.pyplot as plt
 # import networkx as nx
 import igraph as ig
 import numpy as np
+from matplotlib import cm
+import matplotlib.colors as mcolors
 
-SAVE_PREFIX = './figure/'
+SAVE_PREFIX = './figure/test/'
 
 
-def plot_compute_graph(filename):
+def rgba_to_hex(r, g, b, a):
+    r = int(r * 255)
+    g = int(g * 255)
+    b = int(b * 255)
+    a = int(a * 255)
+    hex_r = hex(r)[2:].zfill(2).upper()
+    hex_g = hex(g)[2:].zfill(2).upper()
+    hex_b = hex(b)[2:].zfill(2).upper()
+    hex_a = hex(a)[2:].zfill(2).upper()
+    return "#{}{}{}{}".format(hex_r, hex_g, hex_b, hex_a)
+
+def float_to_rgb_coolwarm(x, vmin, vmax):
+    x = x+1
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    cmap = cm.get_cmap('coolwarm')
+    rgba = cmap(norm(x))
+    return rgba_to_hex(*rgba)
+    
+def float_to_rgb_lognorm_coolwarm(x, vmin, vmax):
+    x = x+1
+    norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
+    cmap = cm.get_cmap('coolwarm')
+    rgba = cmap(norm(x))
+    return rgba_to_hex(*rgba)
+    
+
+
+def plot_compute_graph(filename, color_mode=None, plot_comm=False):
     r"""
     读取计算过程中的op日志，解析出对应的计算图并绘制
     """
@@ -18,7 +47,7 @@ def plot_compute_graph(filename):
     nodes_times = {}
     SHOW_CUSTOM_CLUSTER = False
     CHECK_DEGREE = 6 # gpt 6
-    SCALE_UP = 200
+    SCALE_UP = 600
     data = data[:] #  1500 [467:2100]
     # 解析日志得到无向图
     for row in data:
@@ -43,6 +72,7 @@ def plot_compute_graph(filename):
                 nodes_times[output_id] += 1
             nodes.add(output_id)
     # print(nodes_times)
+
     counts = 0
     print(f"Nodes id with degree=={CHECK_DEGREE}")
     for k,v in nodes_times.items():
@@ -53,31 +83,9 @@ def plot_compute_graph(filename):
 
     # 构造图对象
     g = ig.Graph()
-    # g = ig.Graph(directed=True)
     g.add_vertices(max(list(nodes))+1)
-    # for node in list(nodes):
-    #     g.add_vertex(node)
-    
     for ed in edges:
         g.add_edge(ed[0], ed[1])
-
-    # 度中心性
-    degrees = g.degree()
-    max_degree = max(degrees)
-    degree_static = { i:0 for i in range(0, max_degree+1) }
-    for i in range(len(degrees)):
-        degree_static[degrees[i]] += 1
-    print(degree_static)
-    # colors = ["red" if degree == CHECK_DEGREE else "blue" for degree in degrees]
-    print('max degree:', max(degrees))
-
-    # 介数中心性
-    # betweenness = g.betweenness()
-    # bet_dict = { vertex:b for vertex, b in enumerate(betweenness)}
-    # # print(bet_dict)
-    # bets = list(bet_dict.values())
-    # colors = ["red" if b > 70911 else "blue" for b in bets]
-    # print(np.min(bets), np.max(bets), np.mean(bets), np.median(bets))
 
     ##### custom clusters #####
     if SHOW_CUSTOM_CLUSTER:
@@ -105,6 +113,38 @@ def plot_compute_graph(filename):
     # 删除孤立节点 [WARNING] - 这一步后要再重新生成布局才能去正常绘图
     isolated_vertices = [v.index for v in g.vs if g.degree(v.index) == 0]
     g.delete_vertices(isolated_vertices)
+    
+     
+    # 度中心性
+    degrees = g.degree()
+    max_degree = max(degrees)
+    degree_static = { i:0 for i in range(0, max_degree+1) }
+    for i in range(len(degrees)):
+        degree_static[degrees[i]] += 1
+    print(degree_static)
+    deg_colors = [float_to_rgb_coolwarm(b, min(degrees), max(degrees)) for b in degrees]
+    # deg_colors = ["red" if degree == CHECK_DEGREE else "blue" for degree in degrees]
+    print('max degree:', max(degrees))
+
+    # 介数中心性
+    betweenness = g.betweenness()
+    bet_dict = { vertex:b for vertex, b in enumerate(betweenness)}
+    bets = list(bet_dict.values())
+    bet_colors = [float_to_rgb_lognorm_coolwarm(b, 1+min(bets), 1+max(bets)) for b in bets]
+    print('betweeness(min, max, mean, median): ', np.min(bets), np.max(bets), np.mean(bets), np.median(bets))
+
+    # 接近中心性
+    closeness = g.closeness()
+    closeness = [ 0 if np.isnan(val) else val  for val in closeness]
+    clo_colors = [float_to_rgb_lognorm_coolwarm(b, 1+min(closeness), 1+max(closeness)) for b in closeness]
+    print('closeness(min, max, mean, median): ', np.min(closeness), np.max(closeness), np.mean(closeness), np.median(closeness))
+
+
+    # 求解割点
+    cut_points = g.articulation_points()
+    cut_points = [int(v) for v in cut_points]
+    cut_colors = ['red' if i in cut_points else 'blue' for i in range(1, g.vcount()+1)]
+
 
     # community = g.community_infomap()
     community = g.community_leiden(objective_function='modularity', n_iterations=100)   
@@ -117,15 +157,27 @@ def plot_compute_graph(filename):
     # layout = g.layout_reingold_tilford()        # tree layout
     scale_factor = int(g.vcount()/SCALE_UP)
     if SHOW_CUSTOM_CLUSTER:
-        ig.plot(g, SAVE_PREFIX+'./graph_manual_comm.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
+        ig.plot(g, SAVE_PREFIX+'graph_manual_comm.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
     
-    degrees = g.degree()
-    g.vs["color"] = ["red" if degree == CHECK_DEGREE else "blue" for degree in degrees]
-    ig.plot(g, SAVE_PREFIX+'./graph_degree.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
-    ig.plot(community, SAVE_PREFIX+'./graph_with_comm.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor, mark_groups=True)
+    vcolor_dict = {
+        'degree': deg_colors,
+        'betweeness': bet_colors,
+        'closeness': clo_colors,
+        'cut': cut_colors
+    }
+    if color_mode:
+        g.vs["color"] = vcolor_dict[color_mode]
+        ig.plot(g, SAVE_PREFIX+f'graph_{color_mode}.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
+    else:
+        for k,v in vcolor_dict.items():
+            g.vs["color"] = v
+            ig.plot(g, SAVE_PREFIX+f'graph_{k}.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
     
-    layout = community.cluster_graph().layout_kamada_kawai()
-    ig.plot(community.cluster_graph(), SAVE_PREFIX+'./comm_graph.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor, mark_groups=True)
+    if plot_comm:
+        ig.plot(community, SAVE_PREFIX+'./graph_with_comm.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor, mark_groups=True)
+
+        layout = community.cluster_graph().layout_kamada_kawai()
+        ig.plot(community.cluster_graph(), SAVE_PREFIX+'./comm_graph.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor, mark_groups=True)
     
     # colors = ["red" if degree == CHECK_DEGREE else "blue" for degree in degrees]
     
@@ -216,8 +268,8 @@ def plot_training_loss(files):
     
 
 if __name__ == '__main__':
-    ### 画计算图的
-    # plot_compute_graph('./logs/resnet50.log') # resnet50_once.log pp4_ml_gpt.log llama_op_once.log
+    ### 画计算图的 degree betweeness closeness cut
+    plot_compute_graph('./logs/resnet50_once.log') # resnet50_once.log gpt3_350M_forward_once.log llama2_7B_once.log
 
 
     # fig_range = [3, 4, 5]
@@ -239,4 +291,4 @@ if __name__ == '__main__':
 
     # plot_cumulative_remat_counts(fns, labels, attr_name, title, visual_percent)
 
-    plot_training_loss(['./logs/GPT-1.7B_train_log_ml.log', './logs/GPT-1.7B_train_log_nc.log'])
+    # plot_training_loss(['./logs/GPT-1.7B_train_log_ml.log', './logs/GPT-1.7B_train_log_nc.log'])
