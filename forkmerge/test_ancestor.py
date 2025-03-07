@@ -3,7 +3,7 @@ from collections import defaultdict
 import time
 import os
 
-class Node:
+class TNode:
     def __init__(self, name):
         self.name = name
         self.parents = []     # 父节点列表
@@ -13,12 +13,16 @@ class Node:
         self.forks = set()    # 上游分叉点缓存
 
     def __str__(self):
-        parents_info = ', '.join([p.name for p in self.parents])
-        return f"Node(name={self.name}, out_degree={self.out_degree}, level={self.level}, parents={parents_info})"
+        parents_info = ', '.join([str(p.name) for p in self.parents])
+        return f"TNode(name={self.name}, out_degree={self.out_degree}, level={self.level}, parents={parents_info})"
+    
+    def __repr__(self):
+        parents_info = ', '.join([str(p.name) for p in self.parents])
+        return f"TNode(name={self.name}, out_degree={self.out_degree}, level={self.level}, parents={parents_info})"
 
 class Graph:
     def __init__(self):
-        self.nodes: DefaultDict[str, Node] = {}       # 节点名到节点的映射
+        self.nodes: DefaultDict[str, TNode] = {}       # 节点名到节点的映射
         self.betweenness = defaultdict(int)
 
         self.adj = defaultdict(list)
@@ -33,10 +37,10 @@ class Graph:
     def add_edge(self, u_name, v_name):
         # 确保节点存在
         if u_name not in self.nodes:
-            self.nodes[u_name] = Node(u_name)
+            self.nodes[u_name] = TNode(u_name)
         u = self.nodes[u_name]
         if v_name not in self.nodes:
-            self.nodes[v_name] = Node(v_name)
+            self.nodes[v_name] = TNode(v_name)
         v = self.nodes[v_name]
 
         # 维护邻接表 (optional)
@@ -59,10 +63,61 @@ class Graph:
         # 当节点入度≥2时触发检测
         if len(v.parents) >= 2:
             s = time.time()
-            self._detect_jump(v)
+            # self._detect_jump(v)
+            self._detect_anc(v)
             e = time.time()
             self.time_costs.append((e-s)*1000)
-    
+
+    def _detect_anc(self, v):
+        # 按介数中心性对父节点排序（高频分叉点优先）
+        sorted_parents = sorted(v.parents, 
+                               key=lambda x: self.betweenness[x.name], 
+                               reverse=True)
+        # 遍历父节点对（优先检测高频节点）
+        for i in range(len(sorted_parents)):
+            for j in range(i+1, len(sorted_parents)):
+                p1, p2 = sorted_parents[i], sorted_parents[j]
+                # 查找最近公共分叉点
+                lca = self._find_lca(p1, p2)
+                if lca is not None:
+                    for anc in lca:
+                        self.betweenness[anc.name] += 1  # 更新介数中心性
+                        print(f"跳接结构: 起点 {anc.name} -> 终点 {v.name}")
+                        self.target_ids.add(anc.name)
+                        self.target_ids.add(v.name)
+                        self.target_nodes.add(anc)
+                        self.target_nodes.add(v)
+                    return  # 找到一个即返回（假设优先找最大）
+                # if lca is not None:
+                #     self.betweenness[lca.name] += 1  # 更新介数中心性
+                #     print(f"跳接结构: 起点 {lca.name} -> 终点 {v.name}")
+                #     self.target_ids.add(lca.name)
+                #     self.target_ids.add(v.name)
+                #     self.target_nodes.add(lca)
+                #     self.target_nodes.add(v)
+                #     return  # 找到一个即返回（假设优先找最大）
+
+    def _find_lca(self, a, b):
+        # 获取分叉点缓存并按层级降序排序
+        a_forks = sorted([self.nodes[name] for name in a.forks], 
+                        key=lambda x: x.level, 
+                        reverse=True)
+        b_forks_set = set(b.forks)
+        
+        # 找到第一个公共分叉点
+        lcas = []
+        for node in a_forks:
+            if node.name in b_forks_set:
+                lcas.append(node)
+        if len(lcas) == 0:
+            return None
+        # 对 lcas 按层级降序排序
+        sorted_lcas = sorted(lcas, key=lambda x: x.level, reverse=True)
+        # 定义 k 的值，这里假设 k 为 3，你可以根据需要修改
+        k = 2
+        # 返回前 k 个结果，如果结果不足 k 个则都返回
+        return sorted_lcas[:k]
+
     def _detect_jump(self, v):
         # 遍历所有父节点对
         for i in range(len(v.parents)):
@@ -174,10 +229,21 @@ def test_log(filename):
         g.add_edge(ed[0], ed[1])
     e = time.time()
     print(f"total cost time: {(e-s)*1000} ms")
-    print(f"_get_fork_ancestors cost time: {g.time_costs}")
-    
-    with open('test_ancestor_nodes.txt', 'w') as f:
-        f.write(f"{list(g.target_ids)}")
+    # print(f"_get_fork_ancestors cost time: {g.time_costs}")
+    sorted_betweenness = sorted(g.betweenness.items(), key=lambda item: item[1], reverse=True)
+    if sorted_betweenness:
+        max_val = sorted_betweenness[0][1]
+        # 保留值最大的一批键
+        # max_keys = [key for key, val in sorted_betweenness if val == max_val]
+        max_keys = [key for key, val in sorted_betweenness if val > 0]
+        print("Keys with max value:", len(max_keys), max_keys)
+        with open('test_ancestor_nodes.txt', 'w') as f:
+            f.write(f"{list(max_keys)}")
+    else:
+        print("No betweenness data.")
+
+    # with open('test_ancestor_nodes.txt', 'w') as f:
+    #     f.write(f"{list(g.target_ids)}")
 
 # 测试示例
 if __name__ == "__main__":
@@ -185,7 +251,7 @@ if __name__ == "__main__":
 
     file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/llama2_7B_once.log'
     file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/resnet32_once.log'
-    file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/gpt3_350M_forward_once.log'
     file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/llama2_7B.log'
+    file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/gpt3_350M_forward_once.log'
     file_path = os.environ.get('OP_LOG_PATH', file_path)
     test_log(file_path)

@@ -1,4 +1,5 @@
 from collections import defaultdict, deque
+import os
 
 class EnhancedDynamicDAG:
     def __init__(self):
@@ -202,6 +203,10 @@ class PathDynamicDAG:
 
     def _update_main_path(self):
         """通过parent指针回溯生成主路径集合"""
+        ### 不回溯的情况下，是不能稳定获得最长路径的，需要有其他方法来判断最长路径
+        # current = self.main_path_end
+        # self.main_path_set.add(current)
+
         self.main_path_set.clear()
         current = self.main_path_end
         while current is not None:
@@ -228,7 +233,7 @@ class PathDynamicDAG:
             # 更新主路径末端（类似广度优先的贪心策略）
             if (self.main_path_end is None) or (self.max_in[v] > self.max_in[self.main_path_end]):
                 self.main_path_end = v
-                # self._update_main_path()
+                self._update_main_path()
 
         # 动态检测分叉点和交汇点
         fork_cond = self.out_degree[u] >= 2 and u in self.main_path_set
@@ -241,6 +246,8 @@ class PathDynamicDAG:
 
     def get_main_path(self):
         """获取当前主路径节点列表（输入节点到末端）"""
+        # with open('main_path_nodes.txt', 'w') as f:
+        #     f.write(f"{list(self.main_path_set)}")
         path = []
         current = self.main_path_end
         while current is not None:
@@ -299,13 +306,6 @@ def test_with_log(filename):
                 nodes_times[output_id] += 1
             nodes.add(output_id)
 
-    counts = 0
-    print(f"Nodes id with degree=={CHECK_DEGREE}")
-    for k,v in nodes_times.items():
-        if v == CHECK_DEGREE:
-            counts+=1
-            print(k, end=', ')     
-    print('\ntotal', counts)
 
     # dag = EnhancedDynamicDAG()
     # for ed in edges:
@@ -352,5 +352,6 @@ def test_alg():
 
 # file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/gpt3_350M_forward_once.log'
 file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/llama2_7B_once.log'
+file_path = os.environ.get('OP_LOG_PATH', file_path)
 # file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/resnet32_once.log'
 test_with_log(file_path)

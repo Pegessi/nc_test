@@ -10,6 +10,8 @@ SAVE_PREFIX = './figure/test/llama27B/'
 CUSTOM_NODES_PATH = '/data/wangzehua/Megatron-LM/nc_test/forkmerge/test_ancestor_nodes.txt'
 OP_LOG_PATH = './logs/llama2_7B.log' # resnet50_once.log gpt3_350M_forward_once.log llama2_7B_once.log
 SCALE_UP = 1000
+ONLY_CUSTOM = int(os.environ.get('ONLY_CUSTOM', 0)) == 1
+ENABLE_CUSTOM = int(os.environ.get('ENABLE_CUSTOM', 0)) == 1
 
 SAVE_PREFIX = os.environ.get('SAVE_PREFIX', SAVE_PREFIX)
 CUSTOM_NODES_PATH = os.environ.get('CUSTOM_NODES_PATH', CUSTOM_NODES_PATH)
@@ -56,14 +58,14 @@ def plot_compute_graph(filename, color_mode=None, plot_comm=False):
     nodes_times = {}
     SHOW_CUSTOM_CLUSTER = False
     CHECK_DEGREE = 6 # gpt 6
-    # SCALE_UP = 200
-    data = data[:] #  1500 [467:2100]
+    SPLIT_INDEX = int(os.environ.get('SPLIT_INDEX', len(data)))
+    data = data[:SPLIT_INDEX] #  1500 [467:2100]
     # 解析日志得到无向图
     for row in data:
         if row['INSTRUCTION'] != 'INSTRUCTION':
             continue
-        if row['name']=='add_' and row['inputs'][0] == row['outputs'][0]:
-            continue
+        # if row['name']=='add_' and row['inputs'][0] == row['outputs'][0]:
+        #     continue
         for iid in row['inputs']:
             input_id = int(iid[1:])
             nodes.add(input_id)
@@ -91,7 +93,8 @@ def plot_compute_graph(filename, color_mode=None, plot_comm=False):
     print('\ntotal', counts)
 
     # 构造图对象
-    g = ig.Graph()
+    # g = ig.Graph(directed=ONLY_CUSTOM)
+    g = ig.Graph(directed=True)
     g.add_vertices(max(list(nodes))+1)
     for ed in edges:
         g.add_edge(ed[0], ed[1])
@@ -132,90 +135,95 @@ def plot_compute_graph(filename, color_mode=None, plot_comm=False):
 
 
     ### alg 2
-    file_path = CUSTOM_NODES_PATH
-    # file_path = '/data/wangzehua/Megatron-LM/nc_test/forkmerge/main_path_nodes_restnet32.txt'
-    with open(file_path, 'r') as f:
-        data = f.readlines()
-        data = [eval(row) for row in data]
-    custom_colors = [1 for _ in range(g.vcount()+1)]
-    for idx in data[0]:
-        custom_colors[idx] = float_to_rgb_coolwarm(10000, 1, 10000)
-    path_colors = custom_colors
-    g.vs['color'] = path_colors
+    if ENABLE_CUSTOM:
+        file_path = CUSTOM_NODES_PATH
+        # file_path = '/data/wangzehua/Megatron-LM/nc_test/forkmerge/main_path_nodes_restnet32.txt'
+        with open(file_path, 'r') as f:
+            data = f.readlines()
+            data = [eval(row) for row in data]
+        custom_colors = [1 for _ in range(g.vcount()+1)]
+        for idx in data[0]:
+            custom_colors[idx] = float_to_rgb_coolwarm(10000, 1, 10000)
+        path_colors = custom_colors
+        g.vs['color'] = path_colors
 
     # 删除孤立节点 [WARNING] - 这一步后要再重新生成布局才能去正常绘图
     isolated_vertices = [v.index for v in g.vs if g.degree(v.index) == 0]
     g.delete_vertices(isolated_vertices)
-    
-     
-    # 度中心性
-    degrees = g.degree()
-    max_degree = max(degrees)
-    degree_static = { i:0 for i in range(0, max_degree+1) }
-    for i in range(len(degrees)):
-        degree_static[degrees[i]] += 1
-    print(degree_static)
-    deg_colors = [float_to_rgb_coolwarm(b, min(degrees), max(degrees)) for b in degrees]
-    # deg_colors = ["red" if degree == CHECK_DEGREE else "blue" for degree in degrees]
-    print('max degree:', max(degrees))
 
-    # 介数中心性
-    betweenness = g.betweenness()
-    bet_dict = { vertex:b for vertex, b in enumerate(betweenness)}
-    bets = list(bet_dict.values())
-    bet_colors = [float_to_rgb_lognorm_coolwarm(b, 1+min(bets), 1+max(bets)) for b in bets]
-    print('betweeness(min, max, mean, median): ', np.min(bets), np.max(bets), np.mean(bets), np.median(bets))
-
-    # 接近中心性
-    closeness = g.closeness()
-    closeness = [ 0 if np.isnan(val) else val  for val in closeness]
-    clo_colors = [float_to_rgb_lognorm_coolwarm(b, 1+min(closeness), 1+max(closeness)) for b in closeness]
-    print('closeness(min, max, mean, median): ', np.min(closeness), np.max(closeness), np.mean(closeness), np.median(closeness))
-
-
-    # 求解割点
-    cut_points = g.articulation_points()
-    cut_points = [int(v) for v in cut_points]
-    cut_colors = ['red' if i in cut_points else 'blue' for i in range(1, g.vcount()+1)]
-
-
-    # community = g.community_infomap()
-    community = g.community_leiden(objective_function='modularity', n_iterations=100)   
-    # 使用边介数的层次聚类方法
-    # community = g.community_edge_betweenness()
-    # 得到实际的社区划分
-    # clusters = community.as_clustering()
-
-    layout = g.layout_kamada_kawai()          # 力学布局
-    # layout = g.layout_reingold_tilford()        # tree layout
     scale_factor = int(g.vcount()/SCALE_UP)
-    if SHOW_CUSTOM_CLUSTER:
-        ig.plot(g, SAVE_PREFIX+'graph_manual_comm.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
+    layout = g.layout_kamada_kawai()          # 力学布局
     
-    ### custom colors
-    ig.plot(g, SAVE_PREFIX+'graph_path.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
-    
-    vcolor_dict = {
-        'degree': deg_colors,
-        'betweeness': bet_colors,
-        'closeness': clo_colors,
-        'cut': cut_colors,
-        # 'critical': critical_nodes_colors,
-        # 'path': path_colors
-    }
-    if color_mode:
-        g.vs["color"] = vcolor_dict[color_mode]
-        ig.plot(g, SAVE_PREFIX+f'graph_{color_mode}.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
-    else:
-        for k,v in vcolor_dict.items():
-            g.vs["color"] = v
-            ig.plot(g, SAVE_PREFIX+f'graph_{k}.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
-    
-    if plot_comm:
-        ig.plot(community, SAVE_PREFIX+'./graph_with_comm.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor, mark_groups=True)
+    if not ONLY_CUSTOM:
+        # 度中心性
+        degrees = g.degree()
+        max_degree = max(degrees)
+        degree_static = { i:0 for i in range(0, max_degree+1) }
+        for i in range(len(degrees)):
+            degree_static[degrees[i]] += 1
+        print(degree_static)
+        deg_colors = [float_to_rgb_coolwarm(b, min(degrees), max(degrees)) for b in degrees]
+        # deg_colors = ["red" if degree == CHECK_DEGREE else "blue" for degree in degrees]
+        print('max degree:', max(degrees))
 
-        layout = community.cluster_graph().layout_kamada_kawai()
-        ig.plot(community.cluster_graph(), SAVE_PREFIX+'./comm_graph.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor, mark_groups=True)
+        # 介数中心性
+        betweenness = g.betweenness()
+        bet_dict = { vertex:b for vertex, b in enumerate(betweenness)}
+        bets = list(bet_dict.values())
+        bet_colors = [float_to_rgb_lognorm_coolwarm(b, 1+min(bets), 1+max(bets)) for b in bets]
+        print('betweeness(min, max, mean, median): ', np.min(bets), np.max(bets), np.mean(bets), np.median(bets))
+
+        # 接近中心性
+        closeness = g.closeness()
+        closeness = [ 0 if np.isnan(val) else val  for val in closeness]
+        clo_colors = [float_to_rgb_lognorm_coolwarm(b, 1+min(closeness), 1+max(closeness)) for b in closeness]
+        print('closeness(min, max, mean, median): ', np.min(closeness), np.max(closeness), np.mean(closeness), np.median(closeness))
+
+
+        # 求解割点
+        cut_points = g.articulation_points()
+        cut_points = [int(v) for v in cut_points]
+        cut_colors = ['red' if i in cut_points else 'blue' for i in range(1, g.vcount()+1)]
+
+
+        # community = g.community_infomap()
+        # community = g.community_leiden(objective_function='modularity', n_iterations=100)   
+        # 使用边介数的层次聚类方法
+        # community = g.community_edge_betweenness()
+        # 得到实际的社区划分
+        # clusters = community.as_clustering()
+
+    if ENABLE_CUSTOM:
+        # # layout = g.layout_reingold_tilford()        # tree layout
+        # if SHOW_CUSTOM_CLUSTER:
+        #     ig.plot(g, SAVE_PREFIX+'graph_manual_comm.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
+    
+        ## custom colors
+        custom_export_filename = os.environ.get('CUSTOM_EXPORT_FILENAME', 'graph_custom.png')
+        ig.plot(g, SAVE_PREFIX+custom_export_filename, layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.25*scale_factor)
+        
+    if not ONLY_CUSTOM:
+        vcolor_dict = {
+            'degree': deg_colors,
+            'betweeness': bet_colors,
+            'closeness': clo_colors,
+            'cut': cut_colors,
+            # 'critical': critical_nodes_colors,
+            # 'path': path_colors
+        }
+        if color_mode:
+            g.vs["color"] = vcolor_dict[color_mode]
+            ig.plot(g, SAVE_PREFIX+f'graph_{color_mode}.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
+        else:
+            for k,v in vcolor_dict.items():
+                g.vs["color"] = v
+                ig.plot(g, SAVE_PREFIX+f'graph_{k}.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
+        
+        if plot_comm:
+            ig.plot(community, SAVE_PREFIX+'./graph_with_comm.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor, mark_groups=True)
+
+            layout = community.cluster_graph().layout_kamada_kawai()
+            ig.plot(community.cluster_graph(), SAVE_PREFIX+'./comm_graph.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor, mark_groups=True)
     
     # colors = ["red" if degree == CHECK_DEGREE else "blue" for degree in degrees]
     
