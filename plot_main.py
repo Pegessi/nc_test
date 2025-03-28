@@ -154,6 +154,7 @@ def plot_compute_graph(filename, color_mode=None, plot_comm=False):
     scale_factor = int(g.vcount()/SCALE_UP)
     layout = g.layout_kamada_kawai()          # 力学布局
     
+    TOPK = 50
     if not ONLY_CUSTOM:
         # 度中心性
         degrees = g.degree()
@@ -162,9 +163,14 @@ def plot_compute_graph(filename, color_mode=None, plot_comm=False):
         for i in range(len(degrees)):
             degree_static[degrees[i]] += 1
         print(degree_static)
+        print('max degree:', max(degrees))
         deg_colors = [float_to_rgb_coolwarm(b, min(degrees), max(degrees)) for b in degrees]
         # deg_colors = ["red" if degree == CHECK_DEGREE else "blue" for degree in degrees]
-        print('max degree:', max(degrees))
+        # 对度中心性进行排序，同时保留原索引
+        sorted_degrees = sorted(enumerate(degrees), key=lambda x: x[1], reverse=True)
+        topk_indices = [index for index, _ in sorted_degrees[:TOPK]]
+        with open(SAVE_PREFIX+'topk_degree_indices.txt', 'w') as f:
+            f.write(str(topk_indices))
 
         # 介数中心性
         betweenness = g.betweenness()
@@ -172,18 +178,31 @@ def plot_compute_graph(filename, color_mode=None, plot_comm=False):
         bets = list(bet_dict.values())
         bet_colors = [float_to_rgb_lognorm_coolwarm(b, 1+min(bets), 1+max(bets)) for b in bets]
         print('betweeness(min, max, mean, median): ', np.min(bets), np.max(bets), np.mean(bets), np.median(bets))
+        # 对介数中心性进行排序，同时保留原索引
+        sorted_bets = sorted(enumerate(bets), key=lambda x: x[1], reverse=True)
+        topk_indices = [index for index, _ in sorted_bets[:TOPK]]
+        with open(SAVE_PREFIX+'topk_betweeness_indices.txt', 'w') as f:
+            f.write(str(topk_indices))
 
         # 接近中心性
         closeness = g.closeness()
         closeness = [ 0 if np.isnan(val) else val  for val in closeness]
         clo_colors = [float_to_rgb_lognorm_coolwarm(b, 1+min(closeness), 1+max(closeness)) for b in closeness]
         print('closeness(min, max, mean, median): ', np.min(closeness), np.max(closeness), np.mean(closeness), np.median(closeness))
+        # 对接近中心性进行排序，同时保留原索引
+        sorted_closeness = sorted(enumerate(closeness), key=lambda x: x[1], reverse=True)
+        topk_indices = [index for index, _ in sorted_closeness[:TOPK]]
+        with open(SAVE_PREFIX+'topk_closeness_indices.txt', 'w') as f:
+            f.write(str(topk_indices))
 
 
         # 求解割点
         cut_points = g.articulation_points()
         cut_points = [int(v) for v in cut_points]
         cut_colors = ['red' if i in cut_points else 'blue' for i in range(1, g.vcount()+1)]
+        indices = [ i for i in range(1, g.vcount()+1) if i in cut_points ]
+        with open(SAVE_PREFIX+'cut_indices.txt', 'w') as f:
+            f.write(str(indices))
 
 
         # community = g.community_infomap()

@@ -29,9 +29,10 @@ class TNode:
     #     parents_info = ', '.join([str(p.name) for p in self.parents])
     #     return f"TNode(name={self.name}, out_degree={self.out_degree}, level={self.level}, parents={parents_info})"
     
-    # def __repr__(self):
-    #     parents_info = ', '.join([str(p.name) for p in self.parents])
-    #     return f"TNode(name={self.name}, degree={self.in_degree, self.out_degree}, level={self.level}, parents={parents_info})"
+    def __repr__(self):
+        parents_info = ', '.join([str(p.name) for p in self.parents])
+        return f"TNode(name={self.name})"
+        return f"TNode(name={self.name}, degree={self.in_degree, self.out_degree}, level={self.level}, parents={parents_info})"
 
 class TLayer:
     def __init__(self, layer_id):
@@ -121,9 +122,7 @@ class TLayer:
                     self.dependency[v] += self.shortest_paths[v] / self.shortest_paths[w] * (1 + self.dependency[w])
                 if w not in self.starts:
                     w.calculate_temp['bc'] += self.dependency[w]
-            import ipdb; ipdb.set_trace()
             print()
-
 
 
     def _bf_traverse(self, s: TNode, S: list, direction='forward'):
@@ -165,9 +164,11 @@ class TLayer:
             #       |{v.name}-{v.calculate_temp}| --> |{w.name}-{w.calculate_temp}|")
         # if w not in self.starts:
         if direction == 'forward':
+            # if w in self.starts:
             w.calculate_temp['m'] = self.shortest_paths[w]
             w.calculate_temp['eta'] = self.dependency[w]
         else:
+            # if w in self.ends:
             w.calculate_temp['n'] = self.shortest_paths[w]
             w.calculate_temp['theta'] = self.dependency[w]
         
@@ -181,6 +182,7 @@ class Graph:
         self.nodes: DefaultDict[str, TNode] = {}       # 节点名到节点的映射
         self.betweenness = defaultdict(int)
         self.layers = []   # [ TLayer, ...]
+        self.layer_alpha = []
         self.current_layer_id = -1
         self.current_begins = []
         self.current_ends = []
@@ -188,6 +190,7 @@ class Graph:
         self.upper_nodes = set()
         self.upper_dependency = {}
         self.upper_shortest_paths = {}
+        self.all_upper_shortest_paths = {}
         self.upper_cost = {}
         self.upper_distance = {}
 
@@ -263,15 +266,31 @@ class Graph:
         self.upper_nodes.update(self.layers[self.current_layer_id].starts)
         self.upper_nodes.update(self.layers[self.current_layer_id].ends)
         # self.layers[self.current_layer_id].calculate_spvb_for_new_layer()
+        self._compute_upper_level()
     
     def _update_bcs(self):
         layer_nodes_nums = [len(layer.nodes) for layer in self.layers]
         for layer_id, tl in enumerate(self.layers):
 
+            current_in = tl.starts
+            current_out = tl.ends
             for v in tl.nodes:
                 lamb = v.calculate_temp['bc']
                 # alpha = v.calculate_temp['m']*v.calculate_temp['n']
                 alpha = 0
+                for i in range(layer_id):
+                    before_out = tl.ends
+                    for j in range(layer_id+1, len(self.layers)):
+                        next_in = self.layers[j].starts
+                        for ci in current_in:
+                            for co in current_out:
+                                for bo in before_out:
+                                    for ni in next_in:
+                                        try:
+                                            alpha += self.all_upper_shortest_paths[bo][ci] * self.all_upper_shortest_paths[co][ni] / self.all_upper_shortest_paths[bo][ni]
+                                        except:
+                                            import ipdb; ipdb.set_trace()
+                alpha *= v.calculate_temp['m'] * v.calculate_temp['n']
                 ahead_nodes_num = sum(layer_nodes_nums[:layer_id])
                 beta = v.calculate_temp['eta'] * ahead_nodes_num if layer_id == self.current_layer_id else 0
                 gamma = v.calculate_temp['theta'] * (sum(layer_nodes_nums[layer_id+1:]))
@@ -281,15 +300,20 @@ class Graph:
         ### init
         for layer_id, tl in enumerate(self.layers):
             for s in tl.starts:
-                if s not in self.upper_dependency.keys():
+                if s not in self.upper_cost.keys():
                     self.upper_cost[s] = {}
                 for t in tl.ends:
                     if t in s.children:
                         self.upper_cost[s][t] = t.compute_cost
                     else:
                         self.upper_cost[s][t] = tl.layer_length
-        
+        import ipdb; ipdb.set_trace()
         for s in self.upper_nodes:
+            ### reset
+            self.upper_dependency = {}
+            self.upper_shortest_paths = {}
+            self.upper_distance = {}
+
             ### init
             self.upper_distance[s] = 0
             self.upper_shortest_paths[s] = 1
@@ -298,6 +322,7 @@ class Graph:
             S = []
 
             ### single-source shortest-paths
+            # import ipdb; ipdb.set_trace()
             while not Q.empty():
                 v = Q.get()
                 S.append(v)
@@ -319,8 +344,16 @@ class Graph:
                 w = S.pop()
                 for v in w.upper_pred:
                     self.upper_dependency[v] += self.upper_shortest_paths[v] / self.upper_shortest_paths[w] * (1 + self.upper_dependency[w])
-                if w not in self.starts:
+                if w != s:
                     w.calculate_temp['bc'] += self.upper_dependency[w]
+            
+            ### set shortest path
+            self.all_upper_shortest_paths[s] = {s: 1}
+            for w in self.upper_nodes:
+                if w in self.upper_shortest_paths.keys():
+                    self.all_upper_shortest_paths[s][w] = self.upper_shortest_paths[w]
+        
+
     
     def export_bcs_topk(self, k):
         # 对节点按照 calculate_temp['bc'] 进行排序

@@ -1,4 +1,4 @@
-from collections import deque
+from collections import deque, Counter
 import time
 import os
 
@@ -21,7 +21,7 @@ class Node:
         neighbor.in_degree += 1
 
     def __repr__(self):
-        return f"Node({self.name})"
+        return f"{self.name}"
 
 # 动态有向无环图单源最短路径类
 class DynamicDAGShortestPath:
@@ -33,13 +33,33 @@ class DynamicDAGShortestPath:
         self.queue = deque()
         self.sorted_nodes = [self.start]  # 按距离和层级排序的节点序列
         self.distance_to_max_level_node = {0: self.start}  # 记录每个距离对应的最大层级节点
+        self.distance_to_last_change_time = {0: time.time()}
         self.REMOVE_COUNTS = 0
         self.ADD_COUNTS = 0
+        self.last_change_indexs = {}
+        self.changed_last_indexs = []
+        self.last_change_index = 0
+        self.debug_ids = []
+        self.window_size = 10
+
+        self.last_time_order_nodes = []
+        self.last_same_idx = 0
 
     def add_node(self, node_name):
         if node_name not in self.nodes:
             new_node = Node(node_name)
             self.nodes[node_name] = new_node
+
+    def _update_last_changes(self, index):
+        self.changed_last_indexs.append(index)
+        if index not in self.last_change_indexs.keys():
+            self.last_change_indexs[index] = 0
+        self.last_change_indexs[index] += 1
+        # self.last_change_index = max(self.last_change_indexs, key=self.last_change_indexs.get)
+        # 找到 self.changed_last_indexs[:-10] 中出现最多的数字
+        if len(self.changed_last_indexs) > self.window_size:
+            counter = Counter(self.changed_last_indexs[-self.window_size:])
+            self.last_change_index = counter.most_common(1)[0][0]
 
     def _insert_sorted(self, node):
         # 插入节点到按距离和层级排序的序列中
@@ -54,19 +74,41 @@ class DynamicDAGShortestPath:
 
         # 插入新节点
         self.sorted_nodes.insert(index, node)
+        self._update_last_changes(index)
         self.ADD_COUNTS += 1
-        if self.ADD_COUNTS % 50 == 0:
-            print(f"ADD_COUNTS: {self.ADD_COUNTS}, REMOVE_COUNTS: {self.REMOVE_COUNTS}")
-            print(f"[check nodes] {[n.name for n in self.sorted_nodes]}")
+        if self.ADD_COUNTS % 100 == 0:
+            # print(f"ADD_COUNTS: {self.ADD_COUNTS}, REMOVE_COUNTS: {self.REMOVE_COUNTS}, last_change_index: {self.last_change_index}")
+            time_order_distance = sorted(self.distance_to_last_change_time, key=lambda k: self.distance_to_last_change_time[k])
+            # 获取对应这些distance的node
+            time_order_nodes = [self.distance_to_max_level_node[distance] for distance in time_order_distance]
+            if len(self.last_time_order_nodes) > 0:
+                # 寻找第一个不同的node的index
+                gap_idx = 0 
+                for i in range(len(self.last_time_order_nodes)):
+                    if self.last_time_order_nodes[i] != time_order_nodes[i]:
+                        gap_idx = i
+                        break
+                if gap_idx >= self.last_same_idx:
+                    same_nodes = time_order_nodes[:gap_idx]
+                    print(f"len:{len(same_nodes)}, time_order_nodes: {[n.name for n in same_nodes]}")
+                self.last_same_idx = gap_idx
+                
+            self.last_time_order_nodes = time_order_nodes
+
         self.distance_to_max_level_node[node.distance] = node
+        self.distance_to_last_change_time[node.distance] = time.time()
 
     def _update_sorted_nodes(self, node):
         # 从序列中移除旧的同距离节点，这里相当于一定会移除旧节点，如果是同一个节点反而会保留
         # 旧节点的level一定是小于等于新节点的level的
         if node.distance in self.distance_to_max_level_node:
             old_node = self.distance_to_max_level_node[node.distance]
-            if old_node != node and old_node in self.sorted_nodes:
+            if old_node != node and old_node.level <= node.level and old_node in self.sorted_nodes:
+            # if old_node != node and old_node in self.sorted_nodes:
+                # self._update_last_changes(index)
+                # index = self.sorted_nodes.index(old_node)
                 self.sorted_nodes.remove(old_node)
+
                 self.REMOVE_COUNTS += 1
         # 重新插入节点到合适位置
         self._insert_sorted(node)
@@ -78,35 +120,27 @@ class DynamicDAGShortestPath:
         u = self.nodes[u_name]
         v = self.nodes[v_name]
         u.add_neighbor(v, weight)
-        # 更新节点层级
-        v.level = max([predecessor.level for predecessor in v.in_edges], default=-1) + 1
-        # 检查u是否已被处理，若已处理则尝试松弛v
-        if u.distance != float('inf'):
-            prev_dist = v.distance
-            self.relax(u, v, weight)
-            v.level = max([predecessor.level for predecessor in v.in_edges], default=-1) + 1
-            if v.distance != prev_dist or v.level != v.level:
-                self._update_sorted_nodes(v)
+        
+        self.relax(u, v, weight)
+
 
     def relax(self, u, v, weight):
+        # 更新节点层级
+        v.level = max([predecessor.level for predecessor in v.in_edges], default=-1) + 1
         if v.distance > u.distance + weight:
-            prev_dist = v.distance
             v.distance = u.distance + weight
             # 如果v的距离被更新，将其后继加入队列
-            if prev_dist != v.distance:
-                self.queue.append(v)
+            # if prev_dist != v.distance:
+            self._update_sorted_nodes(v)
+            self.queue.append(v)
+
 
     def process_queue(self):
         while self.queue:
             u = self.queue.popleft()
             for (v, weight) in u.neighbors:
-                prev_dist = v.distance
-                prev_level = v.level
-                v.level = max([predecessor.level for predecessor in v.in_edges], default=-1) + 1
                 self.relax(u, v, weight)
-                v.level = max([predecessor.level for predecessor in v.in_edges], default=-1) + 1
-                if v.distance != prev_dist or v.level != prev_level:
-                    self._update_sorted_nodes(v)
+    
 
     def get_shortest_distance(self, node_name):
         node = self.nodes.get(node_name)
@@ -269,15 +303,18 @@ def test_log_multi_dag(filename):
         sorted_nodes = dag.get_sorted_nodes()
         if len(dag.nodes) < 100:
             continue
+        # import ipdb; ipdb.set_trace()
         sorted_ids.extend([n.name for n in sorted_nodes])
-        distance_ids = [n.name for n in dag.distance_to_max_level_node.values()]
+        # distance_ids = [n.name for n in dag.distance_to_max_level_node.values()]
+        # sorted_ids.extend(dag.debug_ids)
         print(dag.REMOVE_COUNTS, dag.ADD_COUNTS)
         print(f"Nodes sorted by distance and level from the start node in the subgraph with start {dag.start.name}:")
         for node in sorted_nodes:
             print(f"Node: {node.name}, Distance: {node.distance}, Level: {node.level}, In-degree: {node.in_degree}, Out-degree: {node.out_degree}")
 
     with open('test_sp_nodes.txt', 'w') as f:
-        f.write(f"{list(sorted_ids)[:-1*int(len(sorted_ids)*0.1)]}")
+        # f.write(f"{list(sorted_ids)[:-1*int(len(sorted_ids)*0.1)]}")
+        f.write(f"{list(sorted_ids)}")
 
 def test_mock():
     dag = DynamicDAGShortestPath(1)
