@@ -9,8 +9,8 @@ INF_COMPUTE_COST = 1E10
 class TNode:
     def __init__(self, name, compute_cost, layer_id=-1):
         self.name = name
-        self.parents = []     # 父节点列表
-        self.children = []   
+        self.parents = set()     # 父节点列表
+        self.children = set()   
         self.pred = []        # 最近前驱
         self.upper_pred = []
         self.in_degree = 0    # 入度
@@ -65,6 +65,8 @@ class TLayer:
 
     def calculate_bc_for_new_layer(self):
         for s in self.nodes: # starts or all nodes?
+            if s in self.ends:
+                continue
             ### init
             self._reset_stats()
             self.distance[s] = 0
@@ -78,7 +80,8 @@ class TLayer:
             while len(S) > 0:
                 w = S.pop()
                 self._accumulation(w, 'forward')
-                w.calculate_temp['bc'] += self.dependency[w]
+                if w.name != s.name:
+                    w.calculate_temp['bc'] += self.dependency[w]
                 if s in self.starts and w in self.ends:
                     self.layer_length = max(self.layer_length, self.distance[w])
 
@@ -148,11 +151,11 @@ class TLayer:
         if self.distance[w] == INF_COMPUTE_COST:
             Q.put(w)
 
-        if self.distance[w] > self.distance[v] + v.compute_cost:
-            self.distance[w] = self.distance[v] + v.compute_cost
+        if self.distance[w] > self.distance[v] + w.compute_cost:
+            self.distance[w] = self.distance[v] + w.compute_cost
             self.shortest_paths[w] = 0
             w.pred = []
-        if self.distance[w] == self.distance[v] + v.compute_cost:
+        if self.distance[w] == self.distance[v] + w.compute_cost:
             self.shortest_paths[w] += self.shortest_paths[v]
             w.pred.append(v)
     
@@ -169,6 +172,8 @@ class TLayer:
             w.calculate_temp['eta'] = self.dependency[w]
         else:
             # if w in self.ends:
+            if w.name == 3:
+                import ipdb; ipdb.set_trace()
             w.calculate_temp['n'] = self.shortest_paths[w]
             w.calculate_temp['theta'] = self.dependency[w]
         
@@ -228,8 +233,8 @@ class Graph:
         self.in_degree[v] += 1
         
         # 添加父节点关系并更新出度
-        v.parents.append(u)
-        u.children.append(v)
+        v.parents.add(u)
+        u.children.add(v)
         u.out_degree += 1
         v.in_degree += 1
 
@@ -250,9 +255,9 @@ class Graph:
         # 标记层的起始点
         if mark_starts:
             self.layers[self.current_layer_id].starts = self.current_begins
-            for w in self.current_begins:
-                if w.layer_id != self.current_layer_id: # 输入是上一层的输出，手动添加一下
-                    self.layers[self.current_layer_id].add_node(w)
+            # for w in self.current_begins:
+            #     if w.layer_id != self.current_layer_id: # 输入是上一层的输出，手动添加一下
+            #         self.layers[self.current_layer_id].add_node(w)
 
     def _handle_begin_new_layer(self):
         self.current_layer_id += 1
@@ -291,6 +296,8 @@ class Graph:
                                         except:
                                             import ipdb; ipdb.set_trace()
                 alpha *= v.calculate_temp['m'] * v.calculate_temp['n']
+                # if len(self.layers) == 2 and (v.name == 2 or v.name == 3) :
+                #     import ipdb; ipdb.set_trace()
                 ahead_nodes_num = sum(layer_nodes_nums[:layer_id])
                 beta = v.calculate_temp['eta'] * ahead_nodes_num if layer_id == self.current_layer_id else 0
                 gamma = v.calculate_temp['theta'] * (sum(layer_nodes_nums[layer_id+1:]))
@@ -307,7 +314,7 @@ class Graph:
                         self.upper_cost[s][t] = t.compute_cost
                     else:
                         self.upper_cost[s][t] = tl.layer_length
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         for s in self.upper_nodes:
             ### reset
             self.upper_dependency = {}
@@ -361,26 +368,70 @@ class Graph:
         # 取前 k 个节点
         top_k_nodes = sorted_nodes[:k]
         # 返回前 k 个节点的 name
-        return [node.name for node in top_k_nodes]
+        return [node.name for node in top_k_nodes], [node.calculate_temp['bc'] for node in top_k_nodes]
         
     
 
 def test_mock():
     g = Graph()
+    # edges = [
+    #     ("1", "2"), ("2", "3"),
+    #     ("3", "4"), ("4", "5"),  # 3成为分叉点
+    #     ('5', '6'), ('5', '7'), ('5', '8'),
+    #     ('6', '9'), ('7', '10'),
+    #     ("8", "11"), ('9', '11'), ("10", "11"),
+    #     ("11", "12"), ("12", "13"), ("13", "14"),
+    #     ("3", "15"), ("14", "15"), ("15", "16"),
+    #     # 11的父节点3和10
+    # ]
     edges = [
-        ("1", "2"), ("2", "3"),
-        ("3", "4"), ("4", "5"),  # 3成为分叉点
-        ('5', '6'), ('5', '7'), ('5', '8'),
-        ('6', '9'), ('7', '10'),
-        ("8", "11"), ('9', '11'), ("10", "11"),
-        ("11", "12"), ("12", "13"), ("13", "14"),
-        ("3", "15"), ("14", "15"), ("15", "16"),
-        # 11的父节点3和10
+        (-1, -1), # begin layer
+        (1,2), (2,3), (3,4),
+        (4,5), (5,6), ([3,6],7),
+        (-2, -2), # end layer
+        (-1, -1), # begin layer
+        (7,8), (8,9), (9,10), (10,11),
+        (8,13), (13,14), ([8, 11, 14], 12),
+        (12, 15),
+        (-2, -2) # end layer
     ]
-    
+    import networkx as nx
+    ref_g = nx.DiGraph()
+
     for u, v in edges:
-        g.add_edge(u, v)
-    print(g.target_ids)
+        if u == -1 and v == -1:
+            g._handle_begin_new_layer()
+            continue
+        if u == -2 and v == -2:
+            g._handle_end_of_layer()
+            continue
+        # g.add_edges(u if type(u) is list else [u], v if type(v) is list else [v], {'compute_cost': 1})
+        u_list = u if isinstance(u, list) else [u]
+        v_list = v if isinstance(v, list) else [v]
+        for src in u_list:
+            for dst in v_list:
+                ref_g.add_edge(src, dst)
+            g.add_edges(u_list, v_list, {'compute_cost': 1})
+    K = 50
+    topk_id, topk_bc = g.export_bcs_topk(K)
+    ref_bcs = nx.betweenness_centrality(ref_g)
+    # 将 ref_bcs 转换为元组列表
+    ref_bcs_list = [(node, bc) for node, bc in ref_bcs.items()]
+    # 按介数中心性值降序排序
+    ref_bcs_list.sort(key=lambda x: x[1], reverse=True)
+    # 取前 K 个元素
+    topk_ref_bcs = ref_bcs_list[:K]
+    # 分离节点 ID 和介数中心性值
+    topk_ref_node_ids = [node for node, _ in topk_ref_bcs]
+    topk_ref_bc_values = [bc for _, bc in topk_ref_bcs]
+    # 打印结果
+    print("[ref] 前 K 个节点的介数中心性:")
+    for node, bc in zip(topk_ref_node_ids, topk_ref_bc_values):
+        print(f"节点 {node}: {bc}")
+    print("[ours] 前 K 个节点的介数中心性:")
+    for node, bc in zip(topk_id, topk_bc):
+        print(f"节点 {node}: {bc}")
+
 
 def test_log(filename):
     with open(filename, 'r') as f:
@@ -426,7 +477,7 @@ def test_log(filename):
         f.write(f"{list(all_bcs)}")
 
 if __name__ == '__main__':
-    # test_mock()
-    file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/llama2_7B_layers.log'
-    file_path = os.environ.get('OP_LOG_PATH', file_path)
-    test_log(file_path)
+    test_mock()
+    # file_path = '/data/wangzehua/Megatron-LM/nc_test/logs/llama2_7B_layers.log'
+    # file_path = os.environ.get('OP_LOG_PATH', file_path)
+    # test_log(file_path)

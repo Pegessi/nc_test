@@ -6,7 +6,8 @@ import matplotlib as mpl
 
 # 修改函数定义，添加边框粗细和字体大小参数
 def plot_actions(log_file_path, img_name, 
-                 border_width=5, title_font_size=32, label_font_size=20, tick_font_size=16, fontweight='bold'):
+                 border_width=5, title_font_size=32, label_font_size=20, tick_font_size=16, fontweight='bold',
+                 figsize=(16, 10), rotation=10):
     plt.rcParams['font.weight'] = fontweight
     # 初始化用于存储每个 [action] 下不同数值的列表
     action_value_list = {}
@@ -35,7 +36,7 @@ def plot_actions(log_file_path, img_name,
     num_actions = len(actions)
 
     # 创建一个包含两个子图的画布
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 9))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
     # 绘制箱线图展示每个操作对应的时间区间
     data = [action_value_list[action] for action in actions]
@@ -55,8 +56,8 @@ def plot_actions(log_file_path, img_name,
             spine.set_linewidth(border_width)
 
     # 修改标题字体大小
-    ax1.set_title('Time Interval for Each Action', fontsize=title_font_size, fontweight=fontweight)
-    ax2.set_title('Frequency of Each Action', fontsize=title_font_size, fontweight=fontweight)
+    # ax1.set_title('Time Interval for Each Action', fontsize=title_font_size, fontweight=fontweight)
+    # ax2.set_title('Frequency of Each Action', fontsize=title_font_size, fontweight=fontweight)
 
     # 修改标签字体大小
     ax1.set_ylabel('Time (us)', fontsize=label_font_size, fontweight=fontweight)
@@ -77,18 +78,19 @@ def plot_actions(log_file_path, img_name,
 
     ax2.set_ylabel('Frequency', fontsize=label_font_size)
     ax2.set_xticks(index)
-    ax1.set_xticklabels(actions, fontsize=tick_font_size, rotation=-10)
-    ax2.set_xticklabels(actions, fontsize=tick_font_size, rotation=-10)
+    ax1.set_xticklabels(actions, fontsize=tick_font_size, rotation=rotation)
+    ax2.set_xticklabels(actions, fontsize=tick_font_size, rotation=rotation)
     ax2.tick_params(axis='both', which='major', labelsize=tick_font_size)
 
     # 添加数据标签到柱状图
     for bar in bars:
         height = bar.get_height()
-        ax2.annotate(f'{height}',
-                    xy=(bar.get_x() + bar.get_width() / 2, height),
-                    xytext=(0, 1),
-                    textcoords="offset points",
-                    ha='center', va='bottom', fontsize=label_font_size-6)
+        if height < 100:
+            ax2.annotate(f'{height}',
+                        xy=(bar.get_x() + bar.get_width() / 2, height),
+                        xytext=(0, 1),
+                        textcoords="offset points",
+                        ha='center', va='bottom', fontsize=label_font_size-6)
 
     ax1.grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
 
@@ -97,7 +99,7 @@ def plot_actions(log_file_path, img_name,
 
 
 # 修改函数定义，添加边框粗细和字体大小参数
-def plot_overhead(border_width=5, title_font_size=32, label_font_size=20, tick_font_size=16, fontweight='bold'):
+def plot_overhead(border_width=5, title_font_size=32, label_font_size=20, tick_font_size=16, fontweight='bold', figsize=(16, 10)):
     plt.rcParams['font.weight'] = fontweight
     models = ['GPT3 1.7B PP4', 'Llama2 7B', 'AlphaFold', 'Resnet32']
     baseline_times = [9414.8, 1965.11, 4503.792763, 180.319744]
@@ -117,7 +119,7 @@ def plot_overhead(border_width=5, title_font_size=32, label_font_size=20, tick_f
     bar_colors = ['#ffd966', '#FF9b9b', '#5898d5', '#c85862']
     line_colors = ['#FF3333', '#007BFF', '#993333']
 
-    fig, ax1 = plt.subplots(figsize=(16, 10))
+    fig, ax1 = plt.subplots(figsize=figsize)
     ax2 = ax1.twinx()
 
     rects1 = ax1.bar(x - width * 1.5, baseline_times, width, edgecolor='black', label=bar_labels[0], color=bar_colors[0], zorder=10)
@@ -160,11 +162,14 @@ def plot_overhead(border_width=5, title_font_size=32, label_font_size=20, tick_f
     plt.tight_layout()
     plt.savefig('overhead.pdf', dpi=300)
 
-font_config = (5, 30, 28, 20)
+# border, title, label, tick
+font_config = (5, 32, 20, 18)
+fig_size = (8, 5)
+rotation = 30
 
 log_file_path = './logs/system_overhead.log'
-plot_actions(log_file_path, 'segman_overhead.pdf', *font_config)
+plot_actions(log_file_path, 'segman_overhead.pdf', *font_config, figsize=fig_size, rotation=rotation)
 log_file_path = './logs/dag_overhead.log'
-plot_actions(log_file_path, 'dag_overhead.pdf', *font_config)
+plot_actions(log_file_path, 'dag_overhead.pdf', *font_config, figsize=fig_size, rotation=rotation)
 
 plot_overhead(*font_config)

@@ -1,8 +1,16 @@
 import json
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
+
 
 # 定义日志文件路径
 log_file_path = '/data/wangzehua/Megatron-LM/plot/memlogs/GMLAKE-2025-2-7-11-49-32-1899247-default.log'
+
+# 提取变量来指定字体粗细、字体大小和图像边框大小
+FONT_WEIGHT = 'bold'
+FONT_SIZE = 28
+TICK_FONT_SIZE = 20
+BORDER_WIDTH = 5
 
 def get_mem_events(filename: str):
     with open(filename, 'r') as f:
@@ -96,7 +104,8 @@ labels = [
 ]
 
 # 设置图像画布大小为16:9
-plt.figure(figsize=(16, 9))
+plt.figure(figsize=(16, 8))
+# plt.rcParams.update({'font.weight': FONT_WEIGHT, 'font.size': FONT_SIZE})
 
 datas = []
 for idx, file_path in enumerate(log_files):
@@ -107,13 +116,22 @@ for idx, file_path in enumerate(log_files):
     # datas.append(ax, y1, y2)
 
 
+def k_formatter(x, pos):
+    return '{:.0f}K'.format(x / 1000)
 # 绘制折线图
-plt.xlabel('Time/s')
-plt.ylabel('Memory Usage/MB')
-plt.title('Memory Timeline')
-# plt.grid(True)
+
+# 设置x轴y轴刻度字体大小
+plt.xticks(fontsize=TICK_FONT_SIZE, fontweight=FONT_WEIGHT)
+plt.yticks(fontsize=TICK_FONT_SIZE, fontweight=FONT_WEIGHT)
+plt.xlabel('Time/s', fontsize=FONT_SIZE + 4, fontweight=FONT_WEIGHT)
+plt.ylabel('Memory Usage/MB', fontsize=FONT_SIZE + 4, fontweight=FONT_WEIGHT)
+plt.gca().yaxis.set_major_formatter(FuncFormatter(k_formatter))
+# plt.title('Memory Timeline', fontsize=FONT_SIZE + 4, fontweight=FONT_WEIGHT)
+# 设置图像边框大小
+for spine in plt.gca().spines.values():
+    spine.set_linewidth(BORDER_WIDTH)
 plt.grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
 # 设置图例位置在左上角
-plt.legend()
+plt.legend(fontsize=TICK_FONT_SIZE)
 plt.tight_layout()
-plt.savefig('size_vs_corrected_time.png', dpi=400)
+plt.savefig('size_vs_corrected_time.pdf', dpi=400)
