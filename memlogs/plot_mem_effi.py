@@ -1,5 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import os 
+
+SAVE_PREFIX = os.environ.get('SAVE_PREFIX', "./")
+OURS = os.environ.get('OURS', "DT-Control")
 
 # 新增参数
 border_width = 5
@@ -8,7 +12,7 @@ label_font_size = 18
 tick_font_size = 14
 font_weight = 'bold'
 
-plt.rcParams['font.weight'] = font_weight
+# plt.rcParams['font.weight'] = font_weight
 
 ### col 1
 fragmentation_ratios = np.array([
@@ -29,7 +33,7 @@ reserve_ratios = np.array([
 memory_budget_ratios = np.array([1, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3])
 memory_budget_ratios = [str(i) for i in memory_budget_ratios]
 
-methods = ["DTR", "DTE", "DTR+GMLake", "Nebula-Chain w/o mem", "Nebula-Chain"]
+methods = ["DTR", "DTE", "DTR+GMLake", OURS+" w/o mem", OURS]
 
 ### col 2
 # fragmentation部分数据
@@ -51,7 +55,7 @@ reserve_ratios_2 = np.array([
 memory_budget_ratios_2 = np.array([1, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3])
 memory_budget_ratios_2 = [str(i) for i in memory_budget_ratios_2]
 
-methods_2 = ["DTR", "DTE", "DTR+GMLake", "Nebula-Chain w/o mem", "Nebula-Chain"]
+methods_2 = ["DTR", "DTE", "DTR+GMLake", OURS+" w/o mem", OURS]
 
 ### col 3
 # fragmentation部分数据
@@ -68,7 +72,7 @@ reserve_ratios_3 = np.array([
 ])
 memory_budget_ratios_3 = np.array([1, 0.8, 0.7, 0.6, 0.5])
 memory_budget_ratios_3 = [str(i) for i in memory_budget_ratios_3]
-methods_3 = ["Megatron-LM", "Nebula-Chain w/o mem", "Nebula-Chain"]
+methods_3 = ["Megatron-LM", OURS+" w/o mem", OURS]
 colors_3 = ['#906cb9', '#2ba02d', '#c85862']
 
 
@@ -84,8 +88,13 @@ marks = ['o', 's', '^', 'D', 'v']
 for i in range(len(methods)):
     axs[0, 0].plot(memory_budget_ratios, fragmentation_ratios[i], label=methods[i], color=colors[i], marker=marks[i],  zorder=10)
 axs[0, 0].set_ylabel('Fragment Ratio', fontsize=label_font_size, fontweight=font_weight)
-axs[0, 0].set_title('Llama2-7B Lora 8GPU', fontsize=title_font_size, fontweight=font_weight)
+axs[0, 0].set_title('Llama2-7B Lora 8GPU', fontsize=title_font_size)
 axs[0, 0].tick_params(axis='both', which='major', labelsize=tick_font_size)
+# 设置x轴和y轴刻度标签字体为bold
+for tick in axs[0, 0].get_xticklabels():
+    tick.set_fontweight('bold')
+for tick in axs[0, 0].get_yticklabels():
+    tick.set_fontweight('bold')
 for spine in axs[0, 0].spines.values():
     spine.set_linewidth(border_width)
 axs[0, 0].grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
@@ -93,8 +102,13 @@ axs[0, 0].grid(True, linestyle='-', axis='y', which='major', color='gray', alpha
 # 第二个子图：fragmentation，假设为AlphaFold 8GPU
 for i in range(len(methods)):
     axs[0, 1].plot(memory_budget_ratios, fragmentation_ratios_2[i], label=methods[i], color=colors[i], marker=marks[i],  zorder=10)
-axs[0, 1].set_title('AlphaFold 8GPU', fontsize=title_font_size, fontweight=font_weight)
+axs[0, 1].set_title('AlphaFold 8GPU', fontsize=title_font_size)
 axs[0, 1].tick_params(axis='both', which='major', labelsize=tick_font_size)
+# 设置x轴和y轴刻度标签字体为bold
+for tick in axs[0, 1].get_xticklabels():
+    tick.set_fontweight('bold')
+for tick in axs[0, 1].get_yticklabels():
+    tick.set_fontweight('bold')
 for spine in axs[0, 1].spines.values():
     spine.set_linewidth(border_width)
 axs[0, 1].grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
@@ -104,8 +118,13 @@ x_3 = np.arange(len(memory_budget_ratios_3))
 # 第三个子图：fragmentation，假设为GPT3-7.5B 64GPU
 for i in range(len(methods_3)):
     axs[0, 2].plot(memory_budget_ratios_3, fragmentation_ratios_3[i], label=methods_3[i], color=colors_3[i], marker=marks[i],  zorder=10)
-axs[0, 2].set_title('GPT3-7.5B 64GPU', fontsize=title_font_size, fontweight=font_weight)
+axs[0, 2].set_title('GPT3-7.5B 64GPU', fontsize=title_font_size)
 axs[0, 2].tick_params(axis='both', which='major', labelsize=tick_font_size)
+# 设置x轴和y轴刻度标签字体为bold
+for tick in axs[0, 2].get_xticklabels():
+    tick.set_fontweight('bold')
+for tick in axs[0, 2].get_yticklabels():
+    tick.set_fontweight('bold')
 for spine in axs[0, 2].spines.values():
     spine.set_linewidth(border_width)
 axs[0, 2].grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
@@ -120,6 +139,10 @@ axs[1, 0].set_ylabel('Peak Reserve Memory (MB)', fontsize=label_font_size, fontw
 axs[1, 0].set_xticks(x + width * (len(methods) - 1) / 2)
 axs[1, 0].set_xticklabels(memory_budget_ratios, fontsize=tick_font_size)
 axs[1, 0].tick_params(axis='y', which='major', labelsize=tick_font_size)
+for tick in axs[1, 0].get_xticklabels():
+    tick.set_fontweight('bold')
+for tick in axs[1, 0].get_yticklabels():
+    tick.set_fontweight('bold')
 for spine in axs[1, 0].spines.values():
     spine.set_linewidth(border_width)
 axs[1, 0].grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
@@ -131,6 +154,10 @@ axs[1, 1].set_xlabel('Memory Budget Ratios', fontsize=label_font_size, fontweigh
 axs[1, 1].set_xticks(x + width * (len(methods) - 1) / 2)
 axs[1, 1].set_xticklabels(memory_budget_ratios, fontsize=tick_font_size)
 axs[1, 1].tick_params(axis='y', which='major', labelsize=tick_font_size)
+for tick in axs[1, 1].get_xticklabels():
+    tick.set_fontweight('bold')
+for tick in axs[1, 1].get_yticklabels():
+    tick.set_fontweight('bold')
 for spine in axs[1, 1].spines.values():
     spine.set_linewidth(border_width)
 axs[1, 1].grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
@@ -141,6 +168,10 @@ for i in range(len(methods_3)):
 axs[1, 2].set_xticks(x_3 + width * (len(methods) - 1) / 2)
 axs[1, 2].set_xticklabels(memory_budget_ratios_3, fontsize=tick_font_size)
 axs[1, 2].tick_params(axis='y', which='major', labelsize=tick_font_size)
+for tick in axs[1, 2].get_xticklabels():
+    tick.set_fontweight('bold')
+for tick in axs[1, 2].get_yticklabels():
+    tick.set_fontweight('bold')
 for spine in axs[1, 2].spines.values():
     spine.set_linewidth(border_width)
 axs[1, 2].grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
@@ -151,9 +182,9 @@ handles_, labels_ = axs[0, 2].get_legend_handles_labels()
 # import ipdb; ipdb.set_trace()
 handles += [handles_[0]]
 labels += [labels_[0]]
-fig.legend(handles, labels, loc='upper center', ncol=len(methods)+1, fontsize=label_font_size-4)
+fig.legend(handles, labels, loc='upper center', ncol=len(methods)+1, fontsize=label_font_size-4, frameon=False)
 
 plt.tight_layout()
 # 调整布局以适应上方的图例
 plt.subplots_adjust(top=0.9)
-plt.savefig('mem_efficiency.pdf', dpi=300, backend='cairo', facecolor='white')
+plt.savefig(SAVE_PREFIX+'exp_mem_efficiency.pdf', dpi=300, backend='cairo', facecolor='white')

@@ -232,11 +232,11 @@ def plot_compute_graph(filename, color_mode=None, plot_comm=False):
         }
         if color_mode:
             g.vs["color"] = vcolor_dict[color_mode]
-            ig.plot(g, SAVE_PREFIX+f'graph_{color_mode}.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
+            ig.plot(g, SAVE_PREFIX+f'graph_{color_mode}.pdf', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
         else:
             for k,v in vcolor_dict.items():
                 g.vs["color"] = v
-                ig.plot(g, SAVE_PREFIX+f'graph_{k}.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
+                ig.plot(g, SAVE_PREFIX+f'graph_{k}.pdf', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor)
         
         if plot_comm:
             ig.plot(community, SAVE_PREFIX+'./graph_with_comm.png', layout=layout, bbox=(1980*scale_factor, 1600*scale_factor), vertex_size=5*scale_factor, edge_arrow_size=0.5*scale_factor, mark_groups=True)

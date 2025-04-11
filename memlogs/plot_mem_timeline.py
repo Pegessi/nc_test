@@ -103,35 +103,37 @@ labels = [
     ['TORCH_alloc', 'TORCH_reserve']
 ]
 
-# 设置图像画布大小为16:9
-plt.figure(figsize=(16, 8))
-# plt.rcParams.update({'font.weight': FONT_WEIGHT, 'font.size': FONT_SIZE})
+if __name__ == "__main__":
 
-datas = []
-for idx, file_path in enumerate(log_files):
-    ax, y1, y2 = get_mem_events(file_path)
-    ax = [x / 1000 for x in ax]
-    plt.plot(ax, y1, label=labels[idx][0])
-    plt.plot(ax, y2, label=labels[idx][1])
-    # datas.append(ax, y1, y2)
+    # 设置图像画布大小为16:9
+    plt.figure(figsize=(14, 8))
+    # plt.rcParams.update({'font.weight': FONT_WEIGHT, 'font.size': FONT_SIZE})
+
+    datas = []
+    for idx, file_path in enumerate(log_files):
+        ax, y1, y2 = get_mem_events(file_path)
+        ax = [x / 1000 for x in ax]
+        plt.plot(ax, y1, label=labels[idx][0])
+        plt.plot(ax, y2, label=labels[idx][1])
+        # datas.append(ax, y1, y2)
 
 
-def k_formatter(x, pos):
-    return '{:.0f}K'.format(x / 1000)
-# 绘制折线图
+    def k_formatter(x, pos):
+        return '{:.0f}K'.format(x / 1000)
+    # 绘制折线图
 
-# 设置x轴y轴刻度字体大小
-plt.xticks(fontsize=TICK_FONT_SIZE, fontweight=FONT_WEIGHT)
-plt.yticks(fontsize=TICK_FONT_SIZE, fontweight=FONT_WEIGHT)
-plt.xlabel('Time/s', fontsize=FONT_SIZE + 4, fontweight=FONT_WEIGHT)
-plt.ylabel('Memory Usage/MB', fontsize=FONT_SIZE + 4, fontweight=FONT_WEIGHT)
-plt.gca().yaxis.set_major_formatter(FuncFormatter(k_formatter))
-# plt.title('Memory Timeline', fontsize=FONT_SIZE + 4, fontweight=FONT_WEIGHT)
-# 设置图像边框大小
-for spine in plt.gca().spines.values():
-    spine.set_linewidth(BORDER_WIDTH)
-plt.grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
-# 设置图例位置在左上角
-plt.legend(fontsize=TICK_FONT_SIZE)
-plt.tight_layout()
-plt.savefig('size_vs_corrected_time.pdf', dpi=400)
+    # 设置x轴y轴刻度字体大小
+    plt.xticks(fontsize=TICK_FONT_SIZE, fontweight=FONT_WEIGHT)
+    plt.yticks(fontsize=TICK_FONT_SIZE, fontweight=FONT_WEIGHT)
+    plt.xlabel('Time/s', fontsize=FONT_SIZE + 4, fontweight=FONT_WEIGHT)
+    plt.ylabel('Memory Usage/MB', fontsize=FONT_SIZE + 4, fontweight=FONT_WEIGHT)
+    plt.gca().yaxis.set_major_formatter(FuncFormatter(k_formatter))
+    # plt.title('Memory Timeline', fontsize=FONT_SIZE + 4, fontweight=FONT_WEIGHT)
+    # 设置图像边框大小
+    for spine in plt.gca().spines.values():
+        spine.set_linewidth(BORDER_WIDTH)
+    plt.grid(True, linestyle='-', axis='y', which='major', color='gray', alpha=0.5, zorder=0)
+    # 设置图例位置在左上角
+    plt.legend(fontsize=TICK_FONT_SIZE)
+    plt.tight_layout()
+    plt.savefig('size_vs_corrected_time.pdf', dpi=400)
